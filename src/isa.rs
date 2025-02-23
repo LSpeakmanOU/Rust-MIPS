@@ -1,40 +1,18 @@
 use regex::Regex;
 use std::fmt;
 pub fn reg_as_str(reg_id: &u32) -> String{
-    match reg_id{
-        0 => "$0".to_string(),
-        1 => "$at".to_string(),
-        2 => "$v0".to_string(),
-        3 => "$v1".to_string(),
-        4 => "$a0".to_string(),
-        5 => "$a1".to_string(),
-        6 => "$a2".to_string(),
-        7 => "$a3".to_string(),
-        8 => "$t0".to_string(),
-        9 => "$t1".to_string(),
-        10 => "$t2".to_string(),
-        11 => "$t3".to_string(),
-        12 => "$t4".to_string(),
-        13 => "$t5".to_string(),
-        14 => "$t6".to_string(),
-        15 => "$t7".to_string(),
-        16 => "$s0".to_string(),
-        17 => "$s1".to_string(),
-        18 => "$s2".to_string(),
-        19 => "$s3".to_string(),
-        20 => "$s4".to_string(),
-        21 => "$s5".to_string(),
-        22 => "$s6".to_string(),
-        23 => "$s7".to_string(),
-        24 => "$t8".to_string(),
-        25 => "$t9".to_string(),
-        26 => "$k0".to_string(),
-        27 => "$k1".to_string(),
-        28 => "$gp".to_string(),
-        29 => "$sp".to_string(),
-        30 => "$ra".to_string(),
-        31 => "$ra".to_string(),
-        _ => "INVALID".to_string(),
+    // Register names to map
+    let reg_names = vec![
+        "$0", "$at", "$v0", "$v1", "$a0", "$a1", "$a2", "$a3", 
+        "$t0", "$t1", "$t2", "$t3", "$t4", "$t5", "$t6", "$t7",
+        "$s0", "$s1", "$s2", "$s3", "$s4", "$s5", "$s6", "$s7",
+        "$t8", "$t9", "$k0", "$k1", "$gp", "$sp", "$ra", "$ra"
+    ];
+    // Attempt to map id to register name, if possible then map otherwise, return INVALID
+    if let Some(&reg_str) = reg_names.get(*reg_id as usize) {
+        reg_str.to_string()
+    } else {
+        "INVALID".to_string()
     }
 }
 pub fn parse_reg(streg : &str) -> Result<u32, String>{
