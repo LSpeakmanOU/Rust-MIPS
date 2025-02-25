@@ -3,7 +3,7 @@ use cpu::CPU;
 mod isa;
 use isa::*;
 use std::env;
-use std::io::{self, BufRead, BufReader, Write};
+use std::io::{self, BufRead, BufReader};
 use std::io::{Error,ErrorKind};
 use std::fs::File;
 use std::collections::HashMap;
@@ -100,8 +100,13 @@ fn main() -> io::Result<()> {
     }
     // Now that we have a set of instructions, execute them
     let mut cpu = CPU::new();
-    for ins in instructions{
-        println!("{:?}",ins);
+    let debug: bool = true;
+    while cpu.pc < instructions.len(){
+        // Fetch
+        let fetch = instructions[cpu.pc];
+        // Decode and Execute
+        cpu.execute(&fetch);
+        println!("{:?}",fetch);
     }
     
     
