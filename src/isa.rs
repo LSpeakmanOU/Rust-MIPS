@@ -141,7 +141,12 @@ impl fmt::Debug for Instr {
     }
 }
 impl Instr {
-    
+    pub fn is_delay_instruction(instr :&Instr) -> bool{
+        match instr{
+            Instr::Beq{..} | Instr::Bne{..} | Instr::Bgt{..} | Instr::Bge{..} | Instr::Blt{..} | Instr::Ble{..} | Instr::Jump{..} | Instr::Jal{..}=> true,
+            _ => false,
+        }
+    }
     pub fn from_str(line: &String) -> Result<Instr, String> {
         let tokens: Vec<&str> = regex::Regex::new(r"([\s()$,]+|#.*)").unwrap()
         .split(line).filter(|s| !s.is_empty()).collect();

@@ -104,9 +104,23 @@ fn main() -> io::Result<()> {
     while cpu.pc < instructions.len(){
         // Fetch
         let fetch = instructions[cpu.pc];
-        // Decode and Execute
-        cpu.execute(&fetch);
         println!("{:?}",fetch);
+        // Decode and Execute
+        cpu.execute(&fetch).map_err(|s| {
+            Error::new(ErrorKind::Other, format!("Could not execute! {}", s))
+        })?;
+        // If applicable, execute delay slot instruction
+        if Instr::is_delay_instruction(&fetch) && cpu.delay_slot_ready{
+            let delay_instr = instructions[cpu.pc];
+            println!("{:?}",delay_instr);
+            cpu.execute(&delay_instr).map_err(|s| {
+                Error::new(ErrorKind::Other, format!("Could not execute! {}", s))
+            })?;
+            cpu.delay_slot_ready = false;
+        }
+        
+        // Increment PC
+        cpu.pc += 1;
     }
     
     
