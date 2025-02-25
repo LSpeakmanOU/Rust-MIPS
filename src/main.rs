@@ -22,7 +22,7 @@ fn main() -> io::Result<()> {
     let mut p_instrs:Vec<ParsedInstr> = vec![];
     // Stores label mappings
     let mut labels: HashMap<String, u32> = HashMap::new();
-    // Stores current instruction number(TODO Change behavior when assembler is implemented)
+    // Stores current instruction number
     let mut instr_number: u32 = 0;
     // For each line
     for line in reader.lines() {
@@ -32,9 +32,9 @@ fn main() -> io::Result<()> {
                 let line_parsed = ParsedInstr::from_str(&l);
                 // Skip any NOPs
                 match line_parsed{
-                    // Skip all NOPs(TODO change to separate NOP from the idea of no instruction as these are different)
-                    Ok(ParsedInstr::NOP) => {}
-                    // Map labels to the current instruction location
+                    // Skip all empty lines
+                    Ok(ParsedInstr::Empty) => {}
+                    // Map labels to the current instruction location(in words)
                     Ok(ParsedInstr::Label(s)) => {
                         labels.insert(s, instr_number);
                     }
@@ -43,7 +43,9 @@ fn main() -> io::Result<()> {
                         p_instrs.push(p_instr);
                         instr_number += 1;
                     },
-                    Err(_) => return Err(Error::new(ErrorKind::Other,format!("Could not parse instruction! {}",l))),
+                    Err(s) => {
+                        return Err(Error::new(ErrorKind::Other,format!("Could not parse instruction! {}",s)))
+                    },
                 }
             }
             Err(_) => continue,
@@ -51,50 +53,50 @@ fn main() -> io::Result<()> {
     }
     // Map parsed instructions to instructions ready to execute
     let mut instructions: Vec<Instr> = Vec::new();
+    let mut instr_number: i32 = 0;
     for inst in p_instrs{
-        match inst{
+        match &inst{
             // Typical instructions can just be pulled out of any parsed instructions
-            ParsedInstr::I(inner) => instructions.push(inner),
+            ParsedInstr::I(inner) => instructions.push(inner.clone()),
             // Handle labelled instructions
-            ParsedInstr::Beq(r1, r2, label) => {
-                let addr: &u32 = labels.get(&label).expect("Cant get address");
-                instructions.push(Instr::Beq(r1,r2,*addr));
-            },
-            ParsedInstr::Bne(r1, r2, label) => {
-                let addr: &u32 = labels.get(&label).expect("Cant get address");
-                instructions.push(Instr::Bne(r1,r2,*addr));
-            },
-            ParsedInstr::Bgt(r1, r2, label) => {
-                let addr: &u32 = labels.get(&label).expect("Cant get address");
-                instructions.push(Instr::Bgt(r1,r2,*addr));
-            },
-            ParsedInstr::Bge(r1, r2, label) => {
-                let addr: &u32 = labels.get(&label).expect("Cant get address");
-                instructions.push(Instr::Bge(r1,r2,*addr));
-            },
-            ParsedInstr::Blt(r1, r2, label) => {
-                let addr: &u32 = labels.get(&label).expect("Cant get address");
-                instructions.push(Instr::Blt(r1,r2,*addr));
-            },
-            ParsedInstr::Ble(r1, r2, label) => {
-                let addr: &u32 = labels.get(&label).expect("Cant get address");
-                instructions.push(Instr::Ble(r1,r2,*addr));
-            },
-            ParsedInstr::Jump(label) => {
-                let addr: &u32 = labels.get(&label).expect("Cant get address");
-                instructions.push(Instr::Jump(*addr));
-            },
-            ParsedInstr::Jr(label) => {
-                let addr: &u32 = labels.get(&label).expect("Cant get address");
-                instructions.push(Instr::Jr(*addr));
-            },
-            ParsedInstr::Jal(label) => {
-                let addr: &u32 = labels.get(&label).expect("Cant get address");
-                instructions.push(Instr::Jal(*addr));
-            },
+            // Beq, Bne, etc use relative addresses in words
+            // J, and Jal use absolute addresses in words
+            ParsedInstr::Beq{rt, rs, label} | ParsedInstr::Bne{rt, rs, label} | ParsedInstr::Bgt{rt, rs, label} |
+            ParsedInstr::Bge{rt, rs, label} | ParsedInstr::Blt{rt, rs, label} | ParsedInstr::Ble{rt, rs, label} => {
+                let addr: u32 = labels.get(label).unwrap().clone();
+                let rel_addr: i32 = (addr as i32 - (instr_number as i32 + 1)).try_into().unwrap();
+                let instr = match &inst {
+                    ParsedInstr::Beq{..} => Instr::Beq{rt: *rt, rs: *rs, rel_addr},
+                    ParsedInstr::Bne{..} => Instr::Bne{rt: *rt, rs: *rs, rel_addr},
+                    ParsedInstr::Bgt{..} => Instr::Bgt{rt: *rt, rs: *rs, rel_addr},
+                    ParsedInstr::Bge{..} => Instr::Bge{rt: *rt, rs: *rs, rel_addr},
+                    ParsedInstr::Blt{..} => Instr::Blt{rt: *rt, rs: *rs, rel_addr},
+                    ParsedInstr::Ble{..} => Instr::Ble{rt: *rt, rs: *rs, rel_addr},
+                    _ => unreachable!(),
+                };
+                instructions.push(instr);
+            }
+            ParsedInstr::Jump{label} | ParsedInstr::Jal{label} => {
+                let addr: u32 = labels.get(label).unwrap().clone();
+                let instr = match &inst {
+                    ParsedInstr::Jump{..} => Instr::Jump{addr},
+                    ParsedInstr::Jal{..} => Instr::Jal{addr},
+                    _ => unreachable!(),
+                };
+                instructions.push(instr);
+            }
+            ParsedInstr::La{rt, label} => {
+                let addr: u32 = labels.get(label).unwrap().clone();
+                let instr = match &inst {
+                    ParsedInstr::La{..} => Instr::La{rt: *rt, addr},
+                    _ => unreachable!(),
+                };
+                instructions.push(instr);
+            }
             // Handle anything like labels or NOPs that slipped through(shouldn't happen)
             _ => {}
         }
+        instr_number += 1;
     }
     // Now that we have a set of instructions, execute them
     let mut cpu = CPU::new();

@@ -6,7 +6,7 @@ pub fn reg_as_str(reg_id: &u32) -> String{
         "$0", "$at", "$v0", "$v1", "$a0", "$a1", "$a2", "$a3", 
         "$t0", "$t1", "$t2", "$t3", "$t4", "$t5", "$t6", "$t7",
         "$s0", "$s1", "$s2", "$s3", "$s4", "$s5", "$s6", "$s7",
-        "$t8", "$t9", "$k0", "$k1", "$gp", "$sp", "$ra", "$ra"
+        "$t8", "$t9", "$k0", "$k1", "$gp", "$sp", "$fp", "$ra"
     ];
     // Attempt to map id to register name, if possible then map otherwise, return INVALID
     if let Some(&reg_str) = reg_names.get(*reg_id as usize) {
@@ -48,89 +48,95 @@ pub fn parse_reg(streg : &str) -> Result<u32, String>{
         "27" | "k1" => Ok(27),
         "28" | "gp" => Ok(28),
         "29" | "sp" => Ok(29),
-        "30" | "31" | "ra" => Ok(30), // 30 and 31 point to the same place
+        "30" | "fp" => Ok(30),
+        "31" | "ra" => Ok(31),
         _ => Err(format!("Cannot parse register {}",s)),
     }
 }
+#[derive(Clone, Copy)]
 pub enum Instr{
     // Arithmetic instructions
-    Add(u32, u32, u32),
-    Sub(u32, u32, u32),
-    Addi(u32, u32, u32),
-    Addu(u32, u32, u32),
-    Subu(u32, u32, u32),
-    Addiu(u32, u32, u32),
-    Mul(u32, u32, u32),
-    Mult(u32, u32),
-    Div(u32, u32),
+    Add{rd: u32, rs: u32, rt: u32},
+    Sub{rd: u32, rs: u32, rt: u32},
+    Addu{rd: u32, rs: u32, rt: u32},
+    Subu{rd: u32, rs: u32, rt: u32},
+    Addi{rt: u32, rs: u32, immd: u32},
+    Addiu{rt: u32, rs: u32, immd: u32},
+    // Multiplication/Division instructions
+    Mul{rd: u32, rs: u32, rt: u32},
+    Mult{rs: u32, rt: u32},
+    Div{rs: u32, rt: u32},
     // Logical instructions
-    And(u32, u32, u32),
-    Or(u32, u32, u32),
-    Andi(u32, u32, u32),
-    Ori(u32, u32, u32),
-    Sll(u32, u32, u32),
-    Srl(u32, u32, u32),
+    And{rd: u32, rs: u32, rt: u32},
+    Or{rd: u32, rs: u32, rt: u32},
+    Andi{rt: u32, rs: u32, immd: u32},
+    Ori{rt: u32, rs: u32, immd: u32},
+    // Shift instructions
+    Sll{rd: u32, rs: u32, shamt: u32},
+    Srl{rd: u32, rs: u32, shamt: u32},
     // Data Transfer
-    Lw(u32, u32, u32),
-    Sw(u32, u32, u32),
-    Lui(u32, u32),
-    La(u32, u32),
-    Li(u32, u32),
-    Mfhi(u32),
-    Mflo(u32),
-    Move(u32, u32),
+    Lw{rt: u32, rs: u32, immd: u32},
+    Sw{rt: u32, rs: u32, immd: u32},
+    Lui{rt: u32, immd: u32},
+    La{rt: u32, addr: u32}, // Pseudo-instruction
+    Li{rt: u32, immd: u32}, // Pseudo-instruction
+    Mfhi{rd: u32},
+    Mflo{rd: u32},
+    Move{rs: u32, rt: u32}, // Pseudo-instruction
     // Conditional Branch
-    Beq(u32, u32, u32),
-    Bne(u32, u32, u32),
-    Bgt(u32, u32, u32),
-    Bge(u32, u32, u32),
-    Blt(u32, u32, u32),
-    Ble(u32, u32, u32),
+    Beq{rt: u32, rs: u32, rel_addr: i32},
+    Bne{rt: u32, rs: u32, rel_addr: i32},
+    Bgt{rt: u32, rs: u32, rel_addr: i32}, // Pseudo-instruction
+    Bge{rt: u32, rs: u32, rel_addr: i32}, // Pseudo-instruction
+    Blt{rt: u32, rs: u32, rel_addr: i32}, // Pseudo-instruction
+    Ble{rt: u32, rs: u32, rel_addr: i32}, // Pseudo-instruction
     // Comparison
-    Slt(u32, u32, u32),
-    Slti(u32, u32, u32),
+    Slt{rd: u32, rs: u32, rt: u32},
+    Slti{rt: u32, rs: u32, immd: u32},
+    Sltiu{rt: u32, rs: u32, immd: u32},
     // Unconditional Jump
-    Jump(u32),
-    Jr(u32),
-    Jal(u32),
+    Jump{addr: u32},
+    Jr{rd: u32},
+    Jal{addr: u32},
 }
 impl fmt::Debug for Instr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Instr::Add(r1, r2, r3) => write!(f, "add {}, {}, {}",  reg_as_str(r1), reg_as_str(r2), reg_as_str(r3)),
-            Instr::Sub(r1, r2, r3) => write!(f, "sub {}, {}, {}",  reg_as_str(r1), reg_as_str(r2), reg_as_str(r3)),
-            Instr::Addi(r1, r2, immd) => write!(f, "addi {}, {}, {}",  reg_as_str(r1), reg_as_str(r2), immd),
-            Instr::Addu(r1, r2, r3) => write!(f, "sub {}, {}, {}",  reg_as_str(r1), reg_as_str(r2), reg_as_str(r3)),
-            Instr::Subu(r1, r2, r3) => write!(f, "sub {}, {}, {}",  reg_as_str(r1), reg_as_str(r2), reg_as_str(r3)),
-            Instr::Addiu(r1, r2, immd) => write!(f, "addiu {}, {}, {}",  reg_as_str(r1), reg_as_str(r2), immd),
-            Instr::Mul(r1, r2, r3) => write!(f, "sub {}, {}, {}",  reg_as_str(r1), reg_as_str(r2), reg_as_str(r3)),
-            Instr::Mult(rs, rt) => write!(f, "mult {}, {}",  reg_as_str(rs), reg_as_str(rt)),
-            Instr::Div(rs, rt) => write!(f, "div {}, {}",  reg_as_str(rs), reg_as_str(rt)),
-            Instr::And(r1, r2, r3) => write!(f, "sub {}, {}, {}",  reg_as_str(r1), reg_as_str(r2), reg_as_str(r3)),
-            Instr::Or(r1, r2, r3) => write!(f, "sub {}, {}, {}",  reg_as_str(r1), reg_as_str(r2), reg_as_str(r3)),
-            Instr::Andi(r1, r2, r3) => write!(f, "sub {}, {}, {}",  reg_as_str(r1), reg_as_str(r2), reg_as_str(r3)),
-            Instr::Ori(r1, r2, r3) => write!(f, "sub {}, {}, {}",  reg_as_str(r1), reg_as_str(r2), reg_as_str(r3)),
-            Instr::Sll(r1, r2, r3) => write!(f, "sub {}, {}, {}",  reg_as_str(r1), reg_as_str(r2), reg_as_str(r3)),
-            Instr::Srl(r1, r2, r3) => write!(f, "sub {}, {}, {}",  reg_as_str(r1), reg_as_str(r2), reg_as_str(r3)),
-            Instr::Lw(r1, r2, immd) => write!(f, "lw {}, {}({})",  reg_as_str(r1), immd, reg_as_str(r2)),
-            Instr::Sw(r1, r2, r3) => write!(f, "sub {}, {}, {}",  reg_as_str(r1), reg_as_str(r2), reg_as_str(r3)),
-            Instr::Lui(rt, immd) => write!(f, "lui {}, {}",  reg_as_str(rt), immd),
-            Instr::La(rt, immd) => write!(f, "la {}, {}",  reg_as_str(rt), immd),
-            Instr::Li(rt, immd) => write!(f, "li {}, {}",  reg_as_str(rt), immd),
-            Instr::Mfhi(r1) => write!(f, "mfhi {}",  reg_as_str(r1)),
-            Instr::Mflo(r1) => write!(f, "mflo {}",  reg_as_str(r1)),
-            Instr::Move(rt, rs) => write!(f, "move {}, {}",  reg_as_str(rt), reg_as_str(rs)),
-            Instr::Beq(r1, r2, addr) => write!(f, "beq {}, {}, {}",  reg_as_str(r1), reg_as_str(r2), addr),
-            Instr::Bne(r1, r2, addr) => write!(f, "sub {}, {}, {}",  reg_as_str(r1), reg_as_str(r2), addr),
-            Instr::Bgt(r1, r2, addr) => write!(f, "sub {}, {}, {}",  reg_as_str(r1), reg_as_str(r2), addr),
-            Instr::Bge(r1, r2, addr) => write!(f, "sub {}, {}, {}",  reg_as_str(r1), reg_as_str(r2), addr),
-            Instr::Blt(r1, r2, addr) => write!(f, "sub {}, {}, {}",  reg_as_str(r1), reg_as_str(r2), addr),
-            Instr::Ble(r1, r2, addr) => write!(f, "sub {}, {}, {}",  reg_as_str(r1), reg_as_str(r2), addr),
-            Instr::Slt(r1, r2, r3) => write!(f, "sub {}, {}, {}",  reg_as_str(r1), reg_as_str(r2), reg_as_str(r3)),
-            Instr::Slti(r1, r2, r3) => write!(f, "sub {}, {}, {}",  reg_as_str(r1), reg_as_str(r2), reg_as_str(r3)),
-            Instr::Jump(addr) => write!(f, "j {}",  addr),
-            Instr::Jr(rt) => write!(f, "jr {}",  reg_as_str(rt)),
-            Instr::Jal(addr) => write!(f, "jal {}",  addr),
+            Instr::Add{rd, rs, rt} => write!(f, "add {}, {}, {}",  reg_as_str(rd), reg_as_str(rs), reg_as_str(rt)),
+            Instr::Sub{rd, rs, rt} => write!(f, "sub {}, {}, {}",  reg_as_str(rd), reg_as_str(rs), reg_as_str(rt)),
+            Instr::Addi{rt, rs, immd} => write!(f, "addi {}, {}, {}",  reg_as_str(rt), reg_as_str(rs), immd),
+            Instr::Addu{rd, rs, rt} => write!(f, "addu {}, {}, {}",  reg_as_str(rd), reg_as_str(rs), reg_as_str(rt)),
+            Instr::Subu{rd, rs, rt} => write!(f, "subu {}, {}, {}",  reg_as_str(rd), reg_as_str(rs), reg_as_str(rt)),
+            Instr::Addiu{rt, rs, immd} => write!(f, "addiu {}, {}, {}",  reg_as_str(rt), reg_as_str(rs), immd),
+            Instr::Mul{rd, rs, rt} => write!(f, "mul {}, {}, {}",  reg_as_str(rd), reg_as_str(rs), reg_as_str(rt)),
+            Instr::Mult{rs, rt} => write!(f, "mult {}, {}",  reg_as_str(rs), reg_as_str(rt)),
+            Instr::Div{rs, rt} => write!(f, "div {}, {}",  reg_as_str(rs), reg_as_str(rt)),
+            Instr::And{rd, rs, rt} => write!(f, "and {}, {}, {}",  reg_as_str(rd), reg_as_str(rs), reg_as_str(rt)),
+            Instr::Or{rd, rs, rt} => write!(f, "or {}, {}, {}",  reg_as_str(rd), reg_as_str(rs), reg_as_str(rt)),
+            Instr::Andi{rt, rs, immd} => write!(f, "andi {}, {}, {}",  reg_as_str(rt), reg_as_str(rs), immd),
+            Instr::Ori{rt, rs, immd} => write!(f, "ori {}, {}, {}",  reg_as_str(rt), reg_as_str(rs), immd),
+            Instr::Sll{rd, rs, shamt} => write!(f, "sll {}, {}, {}",  reg_as_str(rd), reg_as_str(rs), shamt),
+            Instr::Srl{rd, rs, shamt} => write!(f, "srl {}, {}, {}",  reg_as_str(rd), reg_as_str(rs), shamt),
+            Instr::Lw{rt, rs, immd} => write!(f, "lw {}, {}({})",  reg_as_str(rt), immd, reg_as_str(rs)),
+            Instr::Sw{rt, rs, immd} => write!(f, "sw {}, {}({})",  reg_as_str(rt), immd, reg_as_str(rs)),
+            Instr::Lui{rt, immd} => write!(f, "lui {}, {}",  reg_as_str(rt), immd),
+            Instr::La{rt, addr} => write!(f, "la {}, {}",  reg_as_str(rt), addr),
+            Instr::Li{rt, immd} => write!(f, "li {}, {}",  reg_as_str(rt), immd),
+            Instr::Mfhi{rd} => write!(f, "mfhi {}",  reg_as_str(rd)),
+            Instr::Mflo{rd} => write!(f, "mflo {}",  reg_as_str(rd)),
+            Instr::Move{rs, rt} => write!(f, "move {}, {}",  reg_as_str(rs), reg_as_str(rt)),
+            Instr::Beq{rt, rs, rel_addr} => write!(f, "beq {}, {}, {}",  reg_as_str(rt), reg_as_str(rs), rel_addr),
+            Instr::Bne{rt, rs, rel_addr} => write!(f, "bne {}, {}, {}",  reg_as_str(rt), reg_as_str(rs), rel_addr),
+            Instr::Bgt{rt, rs, rel_addr} => write!(f, "bgt {}, {}, {}",  reg_as_str(rt), reg_as_str(rs), rel_addr),
+            Instr::Bge{rt, rs, rel_addr} => write!(f, "bge {}, {}, {}",  reg_as_str(rt), reg_as_str(rs), rel_addr),
+            Instr::Blt{rt, rs, rel_addr} => write!(f, "blt {}, {}, {}",  reg_as_str(rt), reg_as_str(rs), rel_addr),
+            Instr::Ble{rt, rs, rel_addr} => write!(f, "ble {}, {}, {}",  reg_as_str(rt), reg_as_str(rs), rel_addr),
+            Instr::Slt{rd, rs, rt} => write!(f, "slt {}, {}, {}",  reg_as_str(rd), reg_as_str(rs), reg_as_str(rt)),
+            Instr::Slti{rt, rs, immd} => write!(f, "slti {}, {}, {}",  reg_as_str(rt), reg_as_str(rs), immd),
+            Instr::Sltiu{rt, rs, immd} => write!(f, "slti {}, {}, {}",  reg_as_str(rt), reg_as_str(rs), immd),
+            Instr::Jump{addr} => write!(f, "j {}",  addr),
+            Instr::Jr{rd} => write!(f, "jr {}",  reg_as_str(rd)),
+            Instr::Jal{addr} => write!(f, "jal {}",  addr),
         }
     }
 }
@@ -139,60 +145,119 @@ impl Instr {
     pub fn from_str(line: &String) -> Result<Instr, String> {
         let tokens: Vec<&str> = regex::Regex::new(r"([\s()$,]+|#.*)").unwrap()
         .split(line).filter(|s| !s.is_empty()).collect();
+        let parse_immediate = |s: &str| s.parse::<u32>().unwrap();
+        
+        let parse_two_regs = |tokens: &[&str]| -> Result<(u32, u32), String> {
+            Ok((parse_reg(tokens[1])?, parse_reg(tokens[2])?))
+        };
+
+        let parse_three_regs = |tokens: &[&str]| -> Result<(u32, u32, u32), String> {
+            Ok((parse_reg(tokens[1])?, parse_reg(tokens[2])?, parse_reg(tokens[3])?))
+        };
+        if tokens.len() == 0{
+            return Err("No Tokens to parse!".to_string());
+        }
         match tokens[0]{
-            "add" => {
-                let r1: u32 = parse_reg(tokens[1])?;
-                let r2: u32 = parse_reg(tokens[2])?;
-                let r3: u32 = parse_reg(tokens[3])?;
-                return Ok(Instr::Add(r1, r2, r3));
+            "add" | "addu" | "sub" | "subu" | "mul" | "and" | "or" | "slt" =>{
+                if tokens.len() < 4{
+                    return Err("Cannot parse 3 register R instruction!".to_string());
+                }
+                let (rd, rs, rt) = parse_three_regs(&tokens)?;
+                Ok(match tokens[0] {
+                    "add" => Instr::Add{rd, rs, rt},
+                    "addu" => Instr::Addu{rd, rs, rt},
+                    "sub" => Instr::Sub{rd, rs, rt},
+                    "subu" => Instr::Subu{rd, rs, rt},
+                    "mul" => Instr::Mul{rd, rs, rt},
+                    "and" => Instr::And{rd, rs, rt},
+                    "or" => Instr::Or{rd, rs, rt},
+                    "slt" => Instr::Slt{rd, rs, rt},
+                    _=> unreachable!()
+                })
             }
-            "sub" => {
-                let r1: u32 = parse_reg(tokens[1])?;
-                let r2: u32 = parse_reg(tokens[2])?;
-                let r3: u32 = parse_reg(tokens[3])?;
-                return Ok(Instr::Sub(r1, r2, r3));
+            "addi" | "addiu" | "andi" | "ori" | "slti" | "sltiu" =>{
+                if tokens.len() < 4{
+                    return Err("Cannot parse 2 register, 1 immediate I instruction!".to_string());
+                }
+                let (rt, rs) = parse_two_regs(&tokens)?;
+                let immd = parse_immediate(tokens[3]);
+                Ok(match tokens[0] {
+                    "addi" => Instr::Addi{rt, rs, immd},
+                    "addiu" => Instr::Addiu{rt, rs, immd},
+                    "andi" => Instr::Andi{rt, rs, immd},
+                    "ori" => Instr::Ori{rt, rs, immd},
+                    "slti" => Instr::Slti{rt, rs, immd},
+                    "sltiu" => Instr::Sltiu{rt, rs, immd},
+                    _=> unreachable!()
+                })
             }
-            "addu" => {
-                let r1: u32 = parse_reg(tokens[1])?;
-                let r2: u32 = parse_reg(tokens[2])?;
-                let r3: u32 = parse_reg(tokens[3])?;
-                return Ok(Instr::Addu(r1, r2, r3));
+            "lw" | "sw" =>{
+                if tokens.len() < 4{
+                    return Err("Cannot parse load and store instr!".to_string());
+                }
+                let rt = parse_reg(tokens[1])?;
+                let immd = parse_immediate(tokens[2]);
+                let rs = parse_reg(tokens[3])?;
+                Ok(match tokens[0] {
+                    "addi" => Instr::Addi{rt, rs, immd},
+                    "addiu" => Instr::Addiu{rt, rs, immd},
+                    "andi" => Instr::Andi{rt, rs, immd},
+                    "ori" => Instr::Ori{rt, rs, immd},
+                    "lw" => Instr::Lw{rt, rs, immd},
+                    "sw" => Instr::Sw{rt, rs, immd},
+                    "slti" => Instr::Slti{rt, rs, immd},
+                    "sltiu" => Instr::Sltiu{rt, rs, immd},
+                    _=> unreachable!()
+                })
             }
-            "subu" => {
-                let r1: u32 = parse_reg(tokens[1])?;
-                let r2: u32 = parse_reg(tokens[2])?;
-                let r3: u32 = parse_reg(tokens[3])?;
-                return Ok(Instr::Subu(r1, r2, r3));
+            "mult" | "div" | "move" => {
+                if tokens.len() < 3{
+                    return Err("Cannot parse 2 register instruction!".to_string());
+                }
+                let (rs, rt) = parse_two_regs(&tokens)?;
+                Ok(match tokens[0] {
+                    "mult" => Instr::Mult{rs, rt},
+                    "div" => Instr::Div{rs, rt},
+                    "move" => Instr::Move{rs, rt},
+                    _=> unreachable!()
+                })
             }
-            "addi" => {
-                let r1: u32 = parse_reg(tokens[1])?;
-                let r2: u32 = parse_reg(tokens[2])?;
-                let immd: u32 = tokens[3].parse::<u32>().unwrap();
-                return Ok(Instr::Addi(r1, r2, immd));
+            "sll" | "srl" => {
+                if tokens.len() < 4{
+                    return Err("Cannot parse 2 register, 1 shamt shift instruction!".to_string());
+                }
+                let (rd, rs) = parse_two_regs(&tokens)?;
+                let shamt = parse_immediate(tokens[3]);
+                Ok(match tokens[0] {
+                    "sll" => Instr::Sll{rd, rs, shamt},
+                    "srl" => Instr::Srl{rd, rs, shamt},
+                    _=> unreachable!()
+                })
             }
-            "addiu" => {
-                let r1: u32 = parse_reg(tokens[1])?;
-                let r2: u32 = parse_reg(tokens[2])?;
-                let immd: u32 = tokens[3].parse::<u32>().unwrap();
-                return Ok(Instr::Addiu(r1, r2, immd));
+            "lui" | "li" => {
+                if tokens.len() < 3{
+                    return Err("Cannot parse 1 register, 1 immediate instruction!".to_string());
+                }
+                let rt = parse_reg(tokens[1])?;
+                let immd = parse_immediate(tokens[2]);
+                Ok(match tokens[0] {
+                    "lui" => Instr::Lui{rt, immd},
+                    "li" => Instr::Li{rt, immd},
+                    _=> unreachable!()
+                })
             }
-            "lw" => {
-                let r1: u32 = parse_reg(tokens[1])?;
-                let immd: u32 = tokens[2].parse::<u32>().unwrap();
-                let r2: u32 = parse_reg(tokens[3])?;
-                return Ok(Instr::Lw(r1, r2, immd));
+            "mfhi" | "mflo" | "jr" => {
+                if tokens.len() < 2{
+                    return Err("Cannot parse 1 register instruction!".to_string());
+                }
+                let rd = parse_reg(tokens[1])?;
+                Ok(match tokens[0] {
+                    "mfhi" => Instr::Mfhi{rd},
+                    "mflo" => Instr::Mflo{rd},
+                    "jr" => Instr::Jr{rd},
+                    _=> unreachable!()
+                })
             }
-            "div" => {
-                let r1: u32 = parse_reg(tokens[1])?;
-                let r2: u32 = parse_reg(tokens[2])?;
-                return Ok(Instr::Div(r1, r2));
-            }
-            "mult" => {
-                let r1: u32 = parse_reg(tokens[1])?;
-                let r2: u32 = parse_reg(tokens[2])?;
-                return Ok(Instr::Mult(r1, r2));
-            }
-            
             _ => {return Err(format!("Could Not parse {}",line))}
         }
     }
@@ -201,36 +266,64 @@ impl Instr {
 pub enum ParsedInstr {
     Label(String),
     I(Instr),
-    NOP,
+    Empty,
     // Conditional Branch
-    Beq(u32, u32, String),
-    Bne(u32, u32, String),
-    Bgt(u32, u32, String),
-    Bge(u32, u32, String),
-    Blt(u32, u32, String),
-    Ble(u32, u32, String),
+    Beq{rt: u32, rs: u32, label: String},
+    Bne{rt: u32, rs: u32, label: String},
+    Bgt{rt: u32, rs: u32, label: String},
+    Bge{rt: u32, rs: u32, label: String},
+    Blt{rt: u32, rs: u32, label: String},
+    Ble{rt: u32, rs: u32, label: String},
     // Unconditional Jump
-    Jump(String),
-    Jr(String),
-    Jal(String),
+    Jump{label: String},
+    Jal{label: String},
+    // Load address
+    La{rt: u32, label: String},
 }
 
 impl ParsedInstr {
     pub fn from_str(line: &String) -> Result<ParsedInstr, String> {
         let tokens: Vec<&str> = regex::Regex::new(r"([\s()$,]+|#.*)").unwrap()
         .split(line).filter(|s| !s.is_empty()).collect();
+        let parse_two_regs = |tokens: &[&str]| -> Result<(u32, u32), String> {
+            Ok((parse_reg(tokens[1])?, parse_reg(tokens[2])?))
+        };
         // Skip blank lines
         if tokens.len() == 0{
-            return Ok(ParsedInstr::NOP);
+            return Ok(ParsedInstr::Empty);
         }
         match tokens[0]{
-            "beq" => {
-                let r1: u32 = parse_reg(tokens[1])?;
-                let r2: u32 = parse_reg(tokens[2])?;
-                return Ok(ParsedInstr::Beq(r1,r2,tokens[3].to_string()));
+            "beq" | "bne" | "bgt" | "bge" | "blt" | "ble" =>{
+                if tokens.len() < 4{
+                    return Err("Cannot parse branch instruction!".to_string());
+                }
+                let (rt, rs) = parse_two_regs(&tokens)?;
+                Ok(match tokens[0] {
+                    "beq" => ParsedInstr::Beq{rt, rs, label: tokens[3].to_string()},
+                    "bne" => ParsedInstr::Bne{rt, rs, label: tokens[3].to_string()},
+                    "bgt" => ParsedInstr::Bgt{rt, rs, label: tokens[3].to_string()},
+                    "bge" => ParsedInstr::Bge{rt, rs, label: tokens[3].to_string()},
+                    "blt" => ParsedInstr::Blt{rt, rs, label: tokens[3].to_string()},
+                    "ble" => ParsedInstr::Ble{rt, rs, label: tokens[3].to_string()},
+                    _=> unreachable!()
+                })
             }
-            "jal" => {
-                return Ok(ParsedInstr::Jal(tokens[1].to_string()));
+            "j" | "jal" => {
+                Ok(match tokens[0] {
+                    "j" => ParsedInstr::Jump{label: tokens[1].to_string()},
+                    "jal" => ParsedInstr::Jal{label: tokens[1].to_string()},
+                    _=> unreachable!()
+                })
+            }
+            "la" => {
+                if tokens.len() < 3{
+                    return Err("Cannot parse LA instruction!".to_string());
+                }
+                let rt = parse_reg(tokens[1])?;
+                Ok(match tokens[0] {
+                    "la" => ParsedInstr::La{rt, label: tokens[2].to_string()},
+                    _=> unreachable!()
+                })
             }
             // If not one of the clearly understood label-based instructions its a label or another command
             _ => {

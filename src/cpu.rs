@@ -2,7 +2,7 @@ pub struct CPU{
     pub pc:u32,
     pub hi:u32,
     pub lo:u32,
-    pub reg:[u32;31],
+    pub reg:[u32;32],
 }
 impl CPU {
     pub fn new() -> CPU {
@@ -10,14 +10,14 @@ impl CPU {
             pc:0,
             hi:0,
             lo:0,
-            reg:[0; 31]
+            reg:[0; 32]
         }
     }
     pub fn get_reg(&self, index: usize) -> Result<u32, String> {
         if index < self.reg.len() {
             return Ok(self.reg[index]);
         } else{
-            return Err("Out of bounds array getting".to_string());
+            return Err("Out of bounds register get".to_string());
         }
     }
 
@@ -29,7 +29,7 @@ impl CPU {
             self.reg[index] = value;
             return Ok(());
         } else {
-            return Err("Out of bounds array setting".to_string());
+            return Err("Out of bounds register set".to_string());
         }
     }
 }
